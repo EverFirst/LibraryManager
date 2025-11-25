@@ -1,38 +1,283 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import { Pool } from "@neondatabase/serverless";
+import { eq, like, or, and, sql } from "drizzle-orm";
+import * as schema from "@shared/schema";
+import type {
+  InsertBook,
+  Book,
+  InsertStudent,
+  Student,
+  InsertBorrowRecord,
+  BorrowRecord,
+} from "@shared/schema";
 
-// modify the interface with any CRUD methods
-// you might need
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const db = drizzle(pool, { schema });
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  // Book operations
+  createBook(book: InsertBook): Promise<Book>;
+  getBook(id: string): Promise<Book | undefined>;
+  getBooks(): Promise<Book[]>;
+  searchBooks(query: string): Promise<Book[]>;
+  updateBook(id: string, book: Partial<InsertBook>): Promise<Book | undefined>;
+  deleteBook(id: string): Promise<boolean>;
+
+  // Student operations
+  createStudent(student: InsertStudent): Promise<Student>;
+  getStudent(id: string): Promise<Student | undefined>;
+  getStudents(): Promise<Student[]>;
+  searchStudents(query: string): Promise<Student[]>;
+  updateStudent(
+    id: string,
+    student: Partial<InsertStudent>
+  ): Promise<Student | undefined>;
+  deleteStudent(id: string): Promise<boolean>;
+
+  // Borrow operations
+  createBorrowRecord(record: InsertBorrowRecord): Promise<BorrowRecord>;
+  getBorrowRecord(id: string): Promise<BorrowRecord | undefined>;
+  getBorrowRecords(): Promise<BorrowRecord[]>;
+  getActiveBorrowRecords(): Promise<BorrowRecord[]>;
+  getBorrowRecordsByStudent(studentId: string): Promise<BorrowRecord[]>;
+  getBorrowRecordsByBook(bookId: string): Promise<BorrowRecord[]>;
+  returnBook(recordId: string): Promise<BorrowRecord | undefined>;
+  
+  // Dashboard stats
+  getStats(): Promise<{
+    totalBooks: number;
+    borrowedBooks: number;
+    overdueBooks: number;
+  }>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DbStorage implements IStorage {
+  // Book operations
+  async createBook(insertBook: InsertBook): Promise<Book> {
+    const [book] = await db
+      .insert(schema.books)
+      .values({
+        ...insertBook,
+        available: insertBook.quantity,
+      })
+      .returning();
+    return book;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getBook(id: string): Promise<Book | undefined> {
+    const [book] = await db
+      .select()
+      .from(schema.books)
+      .where(eq(schema.books.id, id));
+    return book;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async getBooks(): Promise<Book[]> {
+    return await db.select().from(schema.books).orderBy(schema.books.createdAt);
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async searchBooks(query: string): Promise<Book[]> {
+    const searchTerm = `%${query}%`;
+    return await db
+      .select()
+      .from(schema.books)
+      .where(
+        or(
+          like(schema.books.title, searchTerm),
+          like(schema.books.author, searchTerm),
+          like(schema.books.category, searchTerm)
+        )
+      )
+      .orderBy(schema.books.createdAt);
+  }
+
+  async updateBook(
+    id: string,
+    bookUpdate: Partial<InsertBook>
+  ): Promise<Book | undefined> {
+    const [book] = await db
+      .update(schema.books)
+      .set(bookUpdate)
+      .where(eq(schema.books.id, id))
+      .returning();
+    return book;
+  }
+
+  async deleteBook(id: string): Promise<boolean> {
+    const result = await db
+      .delete(schema.books)
+      .where(eq(schema.books.id, id))
+      .returning();
+    return result.length > 0;
+  }
+
+  // Student operations
+  async createStudent(insertStudent: InsertStudent): Promise<Student> {
+    const [student] = await db
+      .insert(schema.students)
+      .values(insertStudent)
+      .returning();
+    return student;
+  }
+
+  async getStudent(id: string): Promise<Student | undefined> {
+    const [student] = await db
+      .select()
+      .from(schema.students)
+      .where(eq(schema.students.id, id));
+    return student;
+  }
+
+  async getStudents(): Promise<Student[]> {
+    return await db
+      .select()
+      .from(schema.students)
+      .orderBy(schema.students.grade, schema.students.class, schema.students.number);
+  }
+
+  async searchStudents(query: string): Promise<Student[]> {
+    const searchTerm = `%${query}%`;
+    return await db
+      .select()
+      .from(schema.students)
+      .where(like(schema.students.name, searchTerm))
+      .orderBy(schema.students.grade, schema.students.class, schema.students.number);
+  }
+
+  async updateStudent(
+    id: string,
+    studentUpdate: Partial<InsertStudent>
+  ): Promise<Student | undefined> {
+    const [student] = await db
+      .update(schema.students)
+      .set(studentUpdate)
+      .where(eq(schema.students.id, id))
+      .returning();
+    return student;
+  }
+
+  async deleteStudent(id: string): Promise<boolean> {
+    const result = await db
+      .delete(schema.students)
+      .where(eq(schema.students.id, id))
+      .returning();
+    return result.length > 0;
+  }
+
+  // Borrow operations
+  async createBorrowRecord(
+    insertRecord: InsertBorrowRecord
+  ): Promise<BorrowRecord> {
+    const book = await this.getBook(insertRecord.bookId);
+    if (!book || book.available <= 0) {
+      throw new Error("Book not available");
+    }
+
+    const [record] = await db
+      .insert(schema.borrowRecords)
+      .values(insertRecord)
+      .returning();
+
+    await db
+      .update(schema.books)
+      .set({ available: sql`${schema.books.available} - 1` })
+      .where(eq(schema.books.id, insertRecord.bookId));
+
+    return record;
+  }
+
+  async getBorrowRecord(id: string): Promise<BorrowRecord | undefined> {
+    const [record] = await db
+      .select()
+      .from(schema.borrowRecords)
+      .where(eq(schema.borrowRecords.id, id));
+    return record;
+  }
+
+  async getBorrowRecords(): Promise<BorrowRecord[]> {
+    return await db
+      .select()
+      .from(schema.borrowRecords)
+      .orderBy(sql`${schema.borrowRecords.borrowDate} DESC`);
+  }
+
+  async getActiveBorrowRecords(): Promise<BorrowRecord[]> {
+    return await db
+      .select()
+      .from(schema.borrowRecords)
+      .where(eq(schema.borrowRecords.status, "borrowed"))
+      .orderBy(schema.borrowRecords.dueDate);
+  }
+
+  async getBorrowRecordsByStudent(studentId: string): Promise<BorrowRecord[]> {
+    return await db
+      .select()
+      .from(schema.borrowRecords)
+      .where(eq(schema.borrowRecords.studentId, studentId))
+      .orderBy(sql`${schema.borrowRecords.borrowDate} DESC`);
+  }
+
+  async getBorrowRecordsByBook(bookId: string): Promise<BorrowRecord[]> {
+    return await db
+      .select()
+      .from(schema.borrowRecords)
+      .where(eq(schema.borrowRecords.bookId, bookId))
+      .orderBy(sql`${schema.borrowRecords.borrowDate} DESC`);
+  }
+
+  async returnBook(recordId: string): Promise<BorrowRecord | undefined> {
+    const record = await this.getBorrowRecord(recordId);
+    if (!record || record.status === "returned") {
+      throw new Error("Invalid borrow record");
+    }
+
+    const [updatedRecord] = await db
+      .update(schema.borrowRecords)
+      .set({
+        returnDate: new Date(),
+        status: "returned",
+      })
+      .where(eq(schema.borrowRecords.id, recordId))
+      .returning();
+
+    await db
+      .update(schema.books)
+      .set({ available: sql`${schema.books.available} + 1` })
+      .where(eq(schema.books.id, record.bookId));
+
+    return updatedRecord;
+  }
+
+  async getStats(): Promise<{
+    totalBooks: number;
+    borrowedBooks: number;
+    overdueBooks: number;
+  }> {
+    const [totalBooksResult] = await db
+      .select({ count: sql<number>`cast(count(*) as integer)` })
+      .from(schema.books);
+
+    const [borrowedBooksResult] = await db
+      .select({ count: sql<number>`cast(count(*) as integer)` })
+      .from(schema.borrowRecords)
+      .where(eq(schema.borrowRecords.status, "borrowed"));
+
+    const [overdueBooksResult] = await db
+      .select({ count: sql<number>`cast(count(*) as integer)` })
+      .from(schema.borrowRecords)
+      .where(
+        and(
+          eq(schema.borrowRecords.status, "borrowed"),
+          sql`${schema.borrowRecords.dueDate} < NOW()`
+        )
+      );
+
+    return {
+      totalBooks: totalBooksResult?.count || 0,
+      borrowedBooks: borrowedBooksResult?.count || 0,
+      overdueBooks: overdueBooksResult?.count || 0,
+    };
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DbStorage();
