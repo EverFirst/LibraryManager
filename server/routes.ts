@@ -87,6 +87,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/books/:id", async (req, res) => {
+    try {
+      const bookData = insertBookSchema.partial().parse(req.body);
+      const book = await storage.updateBook(req.params.id, bookData);
+      if (!book) {
+        return res.status(404).json({ error: "Book not found" });
+      }
+      res.json(book);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.delete("/api/books/:id", async (req, res) => {
     try {
       const deleted = await storage.deleteBook(req.params.id);

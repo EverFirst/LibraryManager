@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,17 +29,27 @@ interface AddBookFormProps {
   submitLabel?: string;
 }
 
+const defaultFormData: BookFormData = {
+  title: "",
+  author: "",
+  isbn: "",
+  publisher: "",
+  category: "",
+  year: "",
+  quantity: "1",
+  description: "",
+};
+
 export default function AddBookForm({ onSubmit, onCancel, initialData, submitLabel = "도서 추가" }: AddBookFormProps) {
-  const [formData, setFormData] = useState<BookFormData>(initialData || {
-    title: "",
-    author: "",
-    isbn: "",
-    publisher: "",
-    category: "",
-    year: "",
-    quantity: "1",
-    description: "",
-  });
+  const [formData, setFormData] = useState<BookFormData>(initialData || defaultFormData);
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData(initialData);
+    } else {
+      setFormData(defaultFormData);
+    }
+  }, [initialData]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

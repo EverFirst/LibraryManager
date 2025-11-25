@@ -300,12 +300,12 @@ export default function Books() {
                 </div>
               </div>
 
-              {selectedBook.description && (
-                <div>
-                  <span className="text-sm text-muted-foreground">설명:</span>
-                  <p className="text-sm mt-1">{selectedBook.description}</p>
-                </div>
-              )}
+              <div>
+                <span className="text-sm text-muted-foreground">설명:</span>
+                <p className="text-sm mt-1" data-testid="text-book-detail-description">
+                  {selectedBook.description || "-"}
+                </p>
+              </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t">
                 <Button
