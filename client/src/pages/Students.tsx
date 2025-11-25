@@ -51,7 +51,7 @@ export default function Students() {
   });
 
   const createStudentMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("/api/students", "POST", data),
+    mutationFn: (data: any) => apiRequest("POST", "/api/students", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/students"] });
       setShowAddDialog(false);

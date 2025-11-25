@@ -72,6 +72,10 @@ export const insertBorrowRecordSchema = createInsertSchema(borrowRecords).omit({
   createdAt: true,
   borrowDate: true,
   status: true,
+}).extend({
+  dueDate: z.union([z.string(), z.date()]).transform((val) => 
+    typeof val === 'string' ? new Date(val) : val
+  ),
 });
 
 export type InsertBorrowRecord = z.infer<typeof insertBorrowRecordSchema>;

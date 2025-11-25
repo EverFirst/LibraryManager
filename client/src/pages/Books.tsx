@@ -32,7 +32,19 @@ export default function Books() {
   });
 
   const createBookMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("/api/books", "POST", data),
+    mutationFn: (formData: any) => {
+      const data = {
+        title: formData.title,
+        author: formData.author,
+        isbn: formData.isbn || null,
+        publisher: formData.publisher || null,
+        category: formData.category,
+        publicationYear: formData.year ? parseInt(formData.year) : null,
+        quantity: parseInt(formData.quantity),
+        description: formData.description || null,
+      };
+      return apiRequest("POST", "/api/books", data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/books"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
@@ -51,7 +63,7 @@ export default function Books() {
   });
 
   const deleteBookMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/books/${id}`, "DELETE"),
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/books/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/books"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });

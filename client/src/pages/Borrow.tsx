@@ -40,7 +40,7 @@ export default function Borrow() {
   });
 
   const borrowMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("/api/borrow-records", "POST", data),
+    mutationFn: (data: any) => apiRequest("POST", "/api/borrow-records", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/borrow-records"] });
       queryClient.invalidateQueries({ queryKey: ["/api/books"] });
@@ -63,7 +63,7 @@ export default function Borrow() {
 
   const returnMutation = useMutation({
     mutationFn: (id: string) =>
-      apiRequest(`/api/borrow-records/${id}/return`, "POST"),
+      apiRequest("POST", `/api/borrow-records/${id}/return`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/borrow-records"] });
       queryClient.invalidateQueries({ queryKey: ["/api/books"] });
