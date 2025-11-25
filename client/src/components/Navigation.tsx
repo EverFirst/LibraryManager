@@ -31,7 +31,9 @@ export default function Navigation() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => console.log("Logout clicked")}
+            onClick={() => {
+              window.location.href = "/api/logout";
+            }}
             data-testid="button-logout"
           >
             <LogOut size={18} />

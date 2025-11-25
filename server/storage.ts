@@ -9,6 +9,8 @@ import type {
   Student,
   InsertBorrowRecord,
   BorrowRecord,
+  User,
+  UpsertUser,
 } from "@shared/schema";
 import ws from "ws";
 
@@ -18,6 +20,9 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const db = drizzle(pool, { schema });
 
 export interface IStorage {
+  // User operations (for Replit Auth)
+  getUser(id: string): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
   // Book operations
   createBook(book: InsertBook): Promise<Book>;
   getBook(id: string): Promise<Book | undefined>;
@@ -70,6 +75,27 @@ export interface IStorage {
 }
 
 export class DbStorage implements IStorage {
+  // User operations (for Replit Auth)
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(schema.users).where(eq(schema.users.id, id));
+    return user;
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(schema.users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: schema.users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
+  }
+
   // Book operations
   async createBook(insertBook: InsertBook): Promise<Book> {
     const [book] = await db
