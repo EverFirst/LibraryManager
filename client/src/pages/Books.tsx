@@ -23,6 +23,8 @@ export default function Books() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [editingBook, setEditingBook] = useState<Book | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const { toast } = useToast();
 
   const { data: books = [], isLoading } = useQuery<Book[]>({
@@ -56,6 +58,38 @@ export default function Books() {
       setShowAddDialog(false);
       toast({
         title: "도서가 추가되었습니다",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "오류가 발생했습니다",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateBookMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => {
+      const updateData = {
+        title: data.title,
+        author: data.author,
+        isbn: data.isbn || null,
+        publisher: data.publisher || null,
+        category: data.category,
+        publicationYear: data.year ? parseInt(data.year) : null,
+        quantity: parseInt(data.quantity),
+        description: data.description || null,
+      };
+      return apiRequest("PATCH", `/api/books/${id}`, updateData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      setShowEditDialog(false);
+      setEditingBook(null);
+      toast({
+        title: "도서가 수정되었습니다",
       });
     },
     onError: (error: any) => {
@@ -183,9 +217,20 @@ export default function Books() {
             title: book.title,
             author: book.author,
             isbn: book.isbn || "",
-            category: book.category,
+            category: getCategoryLabel(book.category),
             status: book.available > 0 ? ("available" as const) : ("borrowed" as const),
           }))}
+          onView={(id) => {
+            const book = books.find((b) => b.id === id);
+            if (book) handleViewBook(book);
+          }}
+          onEdit={(id) => {
+            const book = books.find((b) => b.id === id);
+            if (book) {
+              setEditingBook(book);
+              setShowEditDialog(true);
+            }
+          }}
           onDelete={(id) => handleDeleteBook(id)}
         />
       )}
@@ -273,6 +318,18 @@ export default function Books() {
                   삭제
                 </Button>
                 <Button
+                  size="sm"
+                  onClick={() => {
+                    setEditingBook(selectedBook);
+                    setSelectedBook(null);
+                    setShowEditDialog(true);
+                  }}
+                  data-testid="button-edit-from-detail"
+                >
+                  <Edit size={16} className="mr-1" />
+                  수정
+                </Button>
+                <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setSelectedBook(null)}
@@ -282,6 +339,40 @@ export default function Books() {
                 </Button>
               </div>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowEditDialog(false);
+          setEditingBook(null);
+        }
+      }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>도서 수정</DialogTitle>
+            <DialogDescription>도서 정보를 수정합니다.</DialogDescription>
+          </DialogHeader>
+          {editingBook && (
+            <AddBookForm
+              initialData={{
+                title: editingBook.title,
+                author: editingBook.author,
+                isbn: editingBook.isbn || "",
+                publisher: editingBook.publisher || "",
+                category: editingBook.category,
+                year: editingBook.publicationYear?.toString() || "",
+                quantity: editingBook.quantity.toString(),
+                description: editingBook.description || "",
+              }}
+              onSubmit={(data) => updateBookMutation.mutate({ id: editingBook.id, data })}
+              onCancel={() => {
+                setShowEditDialog(false);
+                setEditingBook(null);
+              }}
+              submitLabel="수정"
+            />
           )}
         </DialogContent>
       </Dialog>

@@ -10,15 +10,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-interface AddBookFormProps {
-  onSubmit?: (data: any) => void;
-  onCancel?: () => void;
+interface BookFormData {
+  title: string;
+  author: string;
+  isbn: string;
+  publisher: string;
+  category: string;
+  year: string;
+  quantity: string;
+  description: string;
 }
 
-export default function AddBookForm({ onSubmit, onCancel }: AddBookFormProps) {
-  const [formData, setFormData] = useState({
+interface AddBookFormProps {
+  onSubmit?: (data: BookFormData) => void;
+  onCancel?: () => void;
+  initialData?: BookFormData;
+  submitLabel?: string;
+}
+
+export default function AddBookForm({ onSubmit, onCancel, initialData, submitLabel = "도서 추가" }: AddBookFormProps) {
+  const [formData, setFormData] = useState<BookFormData>(initialData || {
     title: "",
     author: "",
     isbn: "",
@@ -36,11 +48,7 @@ export default function AddBookForm({ onSubmit, onCancel }: AddBookFormProps) {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-2xl font-semibold">도서 추가</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
@@ -183,11 +191,10 @@ export default function AddBookForm({ onSubmit, onCancel }: AddBookFormProps) {
               취소
             </Button>
             <Button type="submit" data-testid="button-submit-book">
-              도서 추가
+              {submitLabel}
             </Button>
           </div>
         </form>
-      </CardContent>
-    </Card>
+    </div>
   );
 }
