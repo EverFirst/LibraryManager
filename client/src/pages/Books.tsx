@@ -49,6 +49,7 @@ export default function Books() {
         publicationYear: formData.year ? parseInt(formData.year) : null,
         quantity: parseInt(formData.quantity),
         description: formData.description || null,
+        imageUrl: formData.imageUrl || null,
       };
       return apiRequest("POST", "/api/books", data);
     },
@@ -80,6 +81,7 @@ export default function Books() {
         publicationYear: data.year ? parseInt(data.year) : null,
         quantity: parseInt(data.quantity),
         description: data.description || null,
+        imageUrl: data.imageUrl || null,
       };
       return apiRequest("PATCH", `/api/books/${id}`, updateData);
     },
@@ -206,6 +208,7 @@ export default function Books() {
               title={book.title}
               author={book.author}
               status={book.available > 0 ? "available" : "borrowed"}
+              imageUrl={book.imageUrl}
               onAction={() => handleViewBook(book)}
             />
           ))}
@@ -257,8 +260,17 @@ export default function Books() {
           {selectedBook && (
             <div className="space-y-4">
               <div className="flex items-start gap-4">
-                <div className="w-24 h-36 bg-muted rounded-lg flex items-center justify-center shrink-0">
-                  <BookOpen size={32} className="text-muted-foreground" />
+                <div className="w-24 h-36 bg-muted rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+                  {selectedBook.imageUrl ? (
+                    <img
+                      src={selectedBook.imageUrl}
+                      alt={selectedBook.title}
+                      className="w-full h-full object-cover"
+                      data-testid="img-book-detail-cover"
+                    />
+                  ) : (
+                    <BookOpen size={32} className="text-muted-foreground" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-xl font-bold mb-1" data-testid="text-book-detail-title">
@@ -365,6 +377,7 @@ export default function Books() {
                 year: editingBook.publicationYear?.toString() || "",
                 quantity: editingBook.quantity.toString(),
                 description: editingBook.description || "",
+                imageUrl: editingBook.imageUrl || "",
               }}
               onSubmit={(data) => updateBookMutation.mutate({ id: editingBook.id, data })}
               onCancel={() => {

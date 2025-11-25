@@ -39,6 +39,7 @@ export const books = pgTable("books", {
   quantity: integer("quantity").notNull().default(1),
   available: integer("available").notNull().default(1),
   description: text("description"),
+  imageUrl: text("image_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

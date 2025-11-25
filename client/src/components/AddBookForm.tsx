@@ -20,6 +20,7 @@ interface BookFormData {
   year: string;
   quantity: string;
   description: string;
+  imageUrl: string;
 }
 
 interface AddBookFormProps {
@@ -38,6 +39,7 @@ const defaultFormData: BookFormData = {
   year: "",
   quantity: "1",
   description: "",
+  imageUrl: "",
 };
 
 export default function AddBookForm({ onSubmit, onCancel, initialData, submitLabel = "도서 추가" }: AddBookFormProps) {
@@ -170,6 +172,21 @@ export default function AddBookForm({ onSubmit, onCancel, initialData, submitLab
                 }
                 data-testid="input-book-quantity"
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="imageUrl" className="text-sm font-medium">
+                표지 이미지 URL
+              </Label>
+              <Input
+                id="imageUrl"
+                type="url"
+                placeholder="https://example.com/book-cover.jpg"
+                value={formData.imageUrl}
+                onChange={(e) =>
+                  setFormData({ ...formData, imageUrl: e.target.value })
+                }
+                data-testid="input-book-image-url"
               />
             </div>
           </div>

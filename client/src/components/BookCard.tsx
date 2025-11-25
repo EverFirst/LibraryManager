@@ -8,6 +8,7 @@ interface BookCardProps {
   title: string;
   author: string;
   status: "available" | "borrowed";
+  imageUrl?: string | null;
   onAction?: () => void;
 }
 
@@ -15,13 +16,23 @@ export default function BookCard({
   title,
   author,
   status,
+  imageUrl,
   onAction,
 }: BookCardProps) {
   return (
     <Card className="hover-elevate overflow-visible">
       <CardContent className="p-4">
-        <div className="aspect-[2/3] bg-muted rounded-lg mb-4 flex items-center justify-center">
-          <BookOpen size={48} className="text-muted-foreground" />
+        <div className="aspect-[2/3] bg-muted rounded-lg mb-4 flex items-center justify-center overflow-hidden">
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={title}
+              className="w-full h-full object-cover"
+              data-testid={`img-book-cover-${title}`}
+            />
+          ) : (
+            <BookOpen size={48} className="text-muted-foreground" />
+          )}
         </div>
         <h3 className="font-semibold text-lg line-clamp-2 mb-1">{title}</h3>
         <p className="text-sm text-muted-foreground mb-3">{author}</p>
