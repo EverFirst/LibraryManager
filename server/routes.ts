@@ -15,6 +15,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/recent-activities", async (req, res) => {
+    try {
+      const activities = await storage.getRecentActivities();
+      res.json(activities);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/overdue-items", async (req, res) => {
+    try {
+      const overdueItems = await storage.getOverdueItems();
+      res.json(overdueItems);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Book routes
   app.get("/api/books", async (req, res) => {
     try {

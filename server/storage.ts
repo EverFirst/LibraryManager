@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { Pool } from "@neondatabase/serverless";
+import { Pool, neonConfig } from "@neondatabase/serverless";
 import { eq, like, or, and, sql } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import type {
@@ -10,6 +10,9 @@ import type {
   InsertBorrowRecord,
   BorrowRecord,
 } from "@shared/schema";
+import ws from "ws";
+
+neonConfig.webSocketConstructor = ws;
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const db = drizzle(pool, { schema });
@@ -49,6 +52,21 @@ export interface IStorage {
     borrowedBooks: number;
     overdueBooks: number;
   }>;
+  
+  getRecentActivities(): Promise<Array<{
+    id: string;
+    studentName: string;
+    bookTitle: string;
+    action: string;
+    timestamp: string;
+  }>>;
+  
+  getOverdueItems(): Promise<Array<{
+    id: string;
+    studentName: string;
+    bookTitle: string;
+    dueDate: string;
+  }>>;
 }
 
 export class DbStorage implements IStorage {
@@ -95,9 +113,23 @@ export class DbStorage implements IStorage {
     id: string,
     bookUpdate: Partial<InsertBook>
   ): Promise<Book | undefined> {
+    const currentBook = await this.getBook(id);
+    if (!currentBook) return undefined;
+    
+    const updateData: any = { ...bookUpdate };
+    
+    if (bookUpdate.quantity !== undefined) {
+      const borrowed = currentBook.quantity - currentBook.available;
+      updateData.available = bookUpdate.quantity - borrowed;
+      
+      if (updateData.available < 0) {
+        throw new Error("Cannot reduce quantity below borrowed count");
+      }
+    }
+    
     const [book] = await db
       .update(schema.books)
-      .set(bookUpdate)
+      .set(updateData)
       .where(eq(schema.books.id, id))
       .returning();
     return book;
@@ -277,6 +309,89 @@ export class DbStorage implements IStorage {
       borrowedBooks: borrowedBooksResult?.count || 0,
       overdueBooks: overdueBooksResult?.count || 0,
     };
+  }
+
+  async getRecentActivities(): Promise<Array<{
+    id: string;
+    studentName: string;
+    bookTitle: string;
+    action: string;
+    timestamp: string;
+  }>> {
+    const records = await db
+      .select({
+        id: schema.borrowRecords.id,
+        studentId: schema.borrowRecords.studentId,
+        bookId: schema.borrowRecords.bookId,
+        borrowDate: schema.borrowRecords.borrowDate,
+        returnDate: schema.borrowRecords.returnDate,
+        status: schema.borrowRecords.status,
+      })
+      .from(schema.borrowRecords)
+      .orderBy(sql`${schema.borrowRecords.borrowDate} DESC`)
+      .limit(10);
+
+    const activities = [];
+    for (const record of records) {
+      const student = await this.getStudent(record.studentId);
+      const book = await this.getBook(record.bookId);
+      
+      if (student && book) {
+        if (record.returnDate) {
+          activities.push({
+            id: `${record.id}-return`,
+            studentName: student.name,
+            bookTitle: book.title,
+            action: "반납",
+            timestamp: record.returnDate.toISOString(),
+          });
+        }
+        activities.push({
+          id: `${record.id}-borrow`,
+          studentName: student.name,
+          bookTitle: book.title,
+          action: "대여",
+          timestamp: record.borrowDate.toISOString(),
+        });
+      }
+    }
+
+    return activities.slice(0, 10);
+  }
+
+  async getOverdueItems(): Promise<Array<{
+    id: string;
+    studentName: string;
+    bookTitle: string;
+    dueDate: string;
+  }>> {
+    const overdueRecords = await db
+      .select()
+      .from(schema.borrowRecords)
+      .where(
+        and(
+          eq(schema.borrowRecords.status, "borrowed"),
+          sql`${schema.borrowRecords.dueDate} < NOW()`
+        )
+      )
+      .orderBy(schema.borrowRecords.dueDate);
+
+    const items = [];
+    for (const record of overdueRecords) {
+      const student = await this.getStudent(record.studentId);
+      const book = await this.getBook(record.bookId);
+      
+      if (student && book) {
+        items.push({
+          id: record.id,
+          studentName: `${student.name} (${student.grade}학년 ${student.class}반)`,
+          bookTitle: book.title,
+          dueDate: record.dueDate.toISOString(),
+        });
+      }
+    }
+
+    return items;
   }
 }
 
