@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import BookCard from "@/components/BookCard";
@@ -8,65 +9,73 @@ import { Search, Plus, Grid, List } from "lucide-react";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { Book } from "@shared/schema";
 
 export default function Books() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const { toast } = useToast();
 
-  const mockBooks = [
-    {
-      id: "1",
-      title: "해리포터와 마법사의 돌",
-      author: "J.K. 롤링",
-      isbn: "978-89-8392-671-4",
-      category: "문학",
-      status: "available" as const,
+  const { data: books = [], isLoading } = useQuery<Book[]>({
+    queryKey: ["/api/books", searchQuery],
+    queryFn: async () => {
+      const url = searchQuery
+        ? `/api/books?search=${encodeURIComponent(searchQuery)}`
+        : "/api/books";
+      const response = await fetch(url);
+      return response.json();
     },
-    {
-      id: "2",
-      title: "어린왕자",
-      author: "생텍쥐페리",
-      isbn: "978-89-324-7208-4",
-      category: "문학",
-      status: "borrowed" as const,
+  });
+
+  const createBookMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("/api/books", "POST", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      setShowAddDialog(false);
+      toast({
+        title: "도서가 추가되었습니다",
+      });
     },
-    {
-      id: "3",
-      title: "그리스 로마 신화",
-      author: "토마스 불핀치",
-      isbn: "978-89-255-4897-2",
-      category: "역사",
-      status: "available" as const,
+    onError: (error: any) => {
+      toast({
+        title: "오류가 발생했습니다",
+        description: error.message,
+        variant: "destructive",
+      });
     },
-    {
-      id: "4",
-      title: "아낌없이 주는 나무",
-      author: "셸 실버스타인",
-      isbn: "978-89-8392-123-8",
-      category: "문학",
-      status: "available" as const,
+  });
+
+  const deleteBookMutation = useMutation({
+    mutationFn: (id: string) => apiRequest(`/api/books/${id}`, "DELETE"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      toast({
+        title: "도서가 삭제되었습니다",
+      });
     },
-    {
-      id: "5",
-      title: "마당을 나온 암탉",
-      author: "황선미",
-      isbn: "978-89-546-0733-4",
-      category: "문학",
-      status: "borrowed" as const,
+    onError: (error: any) => {
+      toast({
+        title: "오류가 발생했습니다",
+        description: error.message,
+        variant: "destructive",
+      });
     },
-    {
-      id: "6",
-      title: "삼국지",
-      author: "나관중",
-      isbn: "978-89-372-1234-5",
-      category: "역사",
-      status: "available" as const,
-    },
-  ];
+  });
+
+  const booksWithStatus = books.map((book) => ({
+    id: book.id,
+    title: book.title,
+    author: book.author,
+    isbn: book.isbn || "",
+    category: book.category,
+    status: book.available > 0 ? ("available" as const) : ("borrowed" as const),
+  }));
 
   return (
     <div className="space-y-6">
@@ -115,19 +124,33 @@ export default function Books() {
         </div>
       </div>
 
-      {viewMode === "grid" ? (
+      {isLoading ? (
+        <div className="text-center py-12 text-muted-foreground">
+          로딩 중...
+        </div>
+      ) : booksWithStatus.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          등록된 도서가 없습니다. 도서를 추가해주세요.
+        </div>
+      ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {mockBooks.map((book) => (
+          {booksWithStatus.map((book) => (
             <BookCard key={book.id} {...book} />
           ))}
         </div>
       ) : (
-        <BookTable books={mockBooks} />
+        <BookTable
+          books={booksWithStatus}
+          onDelete={(id) => deleteBookMutation.mutate(id)}
+        />
       )}
 
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <AddBookForm onCancel={() => setShowAddDialog(false)} />
+          <AddBookForm
+            onSubmit={(data) => createBookMutation.mutate(data)}
+            onCancel={() => setShowAddDialog(false)}
+          />
         </DialogContent>
       </Dialog>
     </div>
