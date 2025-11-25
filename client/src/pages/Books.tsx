@@ -5,11 +5,15 @@ import { Input } from "@/components/ui/input";
 import BookCard from "@/components/BookCard";
 import BookTable from "@/components/BookTable";
 import AddBookForm from "@/components/AddBookForm";
-import { Search, Plus, Grid, List } from "lucide-react";
+import { Search, Plus, Grid, List, BookOpen, X, Edit, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Book } from "@shared/schema";
@@ -18,6 +22,7 @@ export default function Books() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const { toast } = useToast();
 
   const { data: books = [], isLoading } = useQuery<Book[]>({
@@ -80,14 +85,28 @@ export default function Books() {
     },
   });
 
-  const booksWithStatus = books.map((book) => ({
-    id: book.id,
-    title: book.title,
-    author: book.author,
-    isbn: book.isbn || "",
-    category: book.category,
-    status: book.available > 0 ? ("available" as const) : ("borrowed" as const),
-  }));
+  const getCategoryLabel = (category: string) => {
+    const categories: Record<string, string> = {
+      fiction: "문학",
+      nonfiction: "비문학",
+      science: "과학",
+      history: "역사",
+      art: "예술",
+      other: "기타",
+    };
+    return categories[category] || category;
+  };
+
+  const handleViewBook = (book: Book) => {
+    setSelectedBook(book);
+  };
+
+  const handleDeleteBook = (id: string) => {
+    if (confirm("정말로 이 도서를 삭제하시겠습니까?")) {
+      deleteBookMutation.mutate(id);
+      setSelectedBook(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -140,29 +159,130 @@ export default function Books() {
         <div className="text-center py-12 text-muted-foreground">
           로딩 중...
         </div>
-      ) : booksWithStatus.length === 0 ? (
+      ) : books.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           등록된 도서가 없습니다. 도서를 추가해주세요.
         </div>
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {booksWithStatus.map((book) => (
-            <BookCard key={book.id} {...book} />
+          {books.map((book) => (
+            <BookCard
+              key={book.id}
+              id={book.id}
+              title={book.title}
+              author={book.author}
+              status={book.available > 0 ? "available" : "borrowed"}
+              onAction={() => handleViewBook(book)}
+            />
           ))}
         </div>
       ) : (
         <BookTable
-          books={booksWithStatus}
-          onDelete={(id) => deleteBookMutation.mutate(id)}
+          books={books.map((book) => ({
+            id: book.id,
+            title: book.title,
+            author: book.author,
+            isbn: book.isbn || "",
+            category: book.category,
+            status: book.available > 0 ? ("available" as const) : ("borrowed" as const),
+          }))}
+          onDelete={(id) => handleDeleteBook(id)}
         />
       )}
 
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>도서 추가</DialogTitle>
+            <DialogDescription>새로운 도서를 등록합니다.</DialogDescription>
+          </DialogHeader>
           <AddBookForm
             onSubmit={(data) => createBookMutation.mutate(data)}
             onCancel={() => setShowAddDialog(false)}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!selectedBook} onOpenChange={(open) => !open && setSelectedBook(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>도서 상세정보</DialogTitle>
+            <DialogDescription>선택한 도서의 상세 정보입니다.</DialogDescription>
+          </DialogHeader>
+          {selectedBook && (
+            <div className="space-y-4">
+              <div className="flex items-start gap-4">
+                <div className="w-24 h-36 bg-muted rounded-lg flex items-center justify-center shrink-0">
+                  <BookOpen size={32} className="text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-xl font-bold mb-1" data-testid="text-book-detail-title">
+                    {selectedBook.title}
+                  </h3>
+                  <p className="text-muted-foreground mb-2" data-testid="text-book-detail-author">
+                    {selectedBook.author}
+                  </p>
+                  <Badge variant={selectedBook.available > 0 ? "default" : "secondary"}>
+                    {selectedBook.available > 0 ? "대여가능" : "대여중"}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-muted-foreground">ISBN:</span>
+                  <p className="font-medium">{selectedBook.isbn || "-"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">출판사:</span>
+                  <p className="font-medium">{selectedBook.publisher || "-"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">분류:</span>
+                  <p className="font-medium">{getCategoryLabel(selectedBook.category)}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">출판년도:</span>
+                  <p className="font-medium">{selectedBook.publicationYear || "-"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">총 수량:</span>
+                  <p className="font-medium">{selectedBook.quantity}권</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">대여 가능:</span>
+                  <p className="font-medium">{selectedBook.available}권</p>
+                </div>
+              </div>
+
+              {selectedBook.description && (
+                <div>
+                  <span className="text-sm text-muted-foreground">설명:</span>
+                  <p className="text-sm mt-1">{selectedBook.description}</p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleDeleteBook(selectedBook.id)}
+                  data-testid="button-delete-book"
+                >
+                  <Trash2 size={16} className="mr-1" />
+                  삭제
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedBook(null)}
+                  data-testid="button-close-detail"
+                >
+                  닫기
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
